@@ -1,5 +1,10 @@
+require 'money'
+
 require 'protip/converter'
 
+require 'protip/messages/currency'
+require 'protip/messages/money'
+require 'protip/messages/range'
 require 'protip/messages/types'
 require 'google/protobuf'
 module Protip
@@ -15,11 +20,34 @@ module Protip
     @conversions = {}
 
     ## Protip types
+    @conversions['protip.messages.Currency'] = {
+      to_object: ->(message) { message.currency_code },
+      to_message: ->(currency_code, message_class) { message_class.new currency_code: currency_code }
+    }
+
+    @conversions['protip.messages.Money'] = {
+      to_object: ->(message) { ::Money.new(message.amount_cents, message.currency) },
+      to_message: ->(money, message_class) do
+        raise ArgumentError unless money.is_a?(::Money)
+        message_class.new(
+          amount_cents: money.fractional,
+          currency: ::Protip::Messages::Money::Currency.resolve(money.currency.iso_code.to_sym)
+        )
+      end
+    }
+
     @conversions['protip.messages.Date'] = {
       to_object: ->(message) { ::Date.new(message.year, message.month, message.day) },
       to_message: lambda do |date, message_class|
         raise ArgumentError unless date.is_a?(::Date)
         message_class.new year: date.year, month: date.month, day: date.day
+      end
+    }
+
+    @conversions['protip.messages.Range'] = {
+      to_object: ->(message) { message.begin..message.end },
+      to_message: ->(range, message_class) do
+        message_class.new(begin: range.begin.to_i, end: range.end.to_i)
       end
     }
 
